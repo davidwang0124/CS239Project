@@ -77,7 +77,7 @@ object MovieCFR {
     }
 
     val numerator:Double = sum_xy
-    val denominator = sqrt(sum_xx) * sqrt(sum_yy)
+    val denominator = sqrt(sum_xx * sum_yy)
 
     var score:Double = 0.0
     if (denominator != 0) {
@@ -101,7 +101,7 @@ object MovieCFR {
     println("\nLoading movie names...")
     val nameDict = loadMovieNames()
 
-    val data = sc.textFile("s3n://xgwang-spark-demo/ml-100k/ratings.csv")
+    val data = sc.textFile("s3n://xgwang-spark-demo/ml-20m/ratings.csv")
 //    val data = sc.textFile("ml-20m/ratings.csv")
     val header = data.first()
 
