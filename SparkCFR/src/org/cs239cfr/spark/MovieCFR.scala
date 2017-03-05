@@ -21,7 +21,8 @@ object MovieCFR {
     // Create a Map of Ints to Strings, and populate it from u.item.
     var movieNames:Map[Int, String] = Map()
 
-    val lines = Source.fromFile("ml-20m/movies.csv").getLines().drop(1)
+//    val lines = Source.fromFile("ml-20m/movies.csv").getLines().drop(1)
+    val lines = Source.fromFile("movies.csv").getLines().drop(1)
     for (line <- lines) {
       val fields = line.split(",")
       if (fields.length > 1) {
@@ -92,10 +93,10 @@ object MovieCFR {
     // Set the log level to only print errors
     Logger.getLogger("org").setLevel(Level.ERROR)
 
-    //    val conf = new SparkConf()
-    //    conf.setAppName("MovieCFR")
-    //    val sc = new SparkContext(conf)
-    val sc = new SparkContext("local[*]", "MovieCFR")
+    val conf = new SparkConf()
+    conf.setAppName("MovieCFR")
+    val sc = new SparkContext(conf)
+//    val sc = new SparkContext("local[*]", "MovieCFR")
 
     println("\nLoading movie names...")
     val nameDict = loadMovieNames()
@@ -133,7 +134,8 @@ object MovieCFR {
     //Save the results if desired
     println("\nSaving the sorted similarities...")
     val sorted = moviePairSimilarities.sortByKey()
-    sorted.saveAsTextFile("movie-sims")
+//    sorted.saveAsTextFile("movie-sims")
+    sorted.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims.dat")
 
     // Extract similarities for the movie we care about that are "good".
 
