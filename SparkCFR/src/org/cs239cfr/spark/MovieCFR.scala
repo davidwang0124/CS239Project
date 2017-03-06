@@ -77,7 +77,7 @@ object MovieCFR {
     }
 
     val numerator:Double = sum_xy
-    val denominator = sqrt(sum_xx) * sqrt(sum_yy)
+    val denominator = sqrt(sum_xx * sum_yy)
 
     var score:Double = 0.0
     if (denominator != 0) {
@@ -101,8 +101,8 @@ object MovieCFR {
     println("\nLoading movie names...")
     val nameDict = loadMovieNames()
 
-    //    val data = sc.textFile("s3://xgwang-spark-demo/ml-20m/ratings.csv")
-    val data = sc.textFile("ml-20m/ratings.csv")
+    val data = sc.textFile("s3n://xgwang-spark-demo/ml-20m/ratings.csv")
+//    val data = sc.textFile("ml-20m/ratings.csv")
     val header = data.first()
 
     // Map ratings to key / value pairs: user ID => movie ID, rating
@@ -135,7 +135,7 @@ object MovieCFR {
     println("\nSaving the sorted similarities...")
     val sorted = moviePairSimilarities.sortByKey()
 //    sorted.saveAsTextFile("movie-sims")
-    sorted.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims.dat")
+    sorted.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims")
 
     // Extract similarities for the movie we care about that are "good".
 
