@@ -160,7 +160,7 @@ object MovieCFR {
         userRecs(recRow) += simValue * userRecs(userRow)
       })
       val recommendations = notSeen.map(mID => (mID, userRecs(mID-1)))
-        .sortBy(_._2)
+        .sortWith(_._2 > _._2)
       recommendations.foreach(println)
 
 //      // Calculate top similar movies
