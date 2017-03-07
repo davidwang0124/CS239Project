@@ -22,7 +22,7 @@ object MovieCFR {
     var movieNames:Map[Int, String] = Map()
 
 //    val lines = Source.fromFile("ml-20m/movies.csv").getLines().drop(1)
-    val lines = Source.fromFile("movies.csv").getLines().drop(1)
+    val lines = Source.fromFile("movies.csv").getLines()
     for (line <- lines) {
       val fields = line.split(",")
       if (fields.length > 1) {
@@ -103,11 +103,9 @@ object MovieCFR {
 
     val data = sc.textFile("s3n://xgwang-spark-demo/ml-20m/ratings.csv")
 //    val data = sc.textFile("ml-20m/ratings.csv")
-    val header = data.first()
 
     // Map ratings to key / value pairs: user ID => movie ID, rating
     val ratings = data
-      .filter(l => l != header)
       .map(l => l.split(","))
       .map(l => (l(0).toInt, (l(1).toInt, l(2).toDouble)))
 
@@ -129,47 +127,74 @@ object MovieCFR {
 
     // We now have (movie1, movie2) = > (rating1, rating2), (rating1, rating2) ...
     // Can now compute similarities.
-    val moviePairSimilarities = moviePairRatings.mapValues(computeCosineSimilarity).cache()
+    val moviePairSimilarities = moviePairRatings.mapValues(computeCosineSimilarity).persist()
+//    val moviePairSimilarities = moviePairRatings.mapValues(computeCosineSimilarity).cache()
 
     //Save the results if desired
     println("\nSaving the sorted similarities...")
-    val sorted = moviePairSimilarities.sortByKey()
+    val sortedSim = moviePairSimilarities.sortByKey()
 //    sorted.saveAsTextFile("movie-sims")
-    sorted.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims")
+    sortedSim.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims")
 
     // Extract similarities for the movie we care about that are "good".
 
     if (args.length > 0) {
-      val scoreThreshold = 0.97
-      val coOccurrenceThreshold = 1000.0
+      // Calculate top recommended movie based on user
+      val userID: Int = args(0).toInt
+      val userRatingVector: Array[Double] = new Array(nameDict.size)
+      ratings.filter(l => l._1 == userID)
+          .foreach(l => {
+            val mID = l._2._1 - 1
+            val rating = l._2._2
+            userRatingVector(mID) = rating
+          })
+      val notSeen = nameDict.keySet
+          .filter(movieID => userRatingVector(movieID-1) != 0)
+          .toArray // TODO: pick top 50 or a number as top xxx recommend!!
 
-      val movieID:Int = args(0).toInt
+      val userRecs: Array[Double] = new Array(nameDict.size)
+      sortedSim.foreach(l => {
+        val recRow = l._1._1 - 1
+        val userRow = l._1._2 - 1
+        val simValue = l._2._1
+        userRecs(recRow) += simValue * userRecs(userRow)
+      })
+      val recommendations = notSeen.map(mID => (mID, userRecs(mID-1)))
+        .sortBy(_._2)
+      recommendations.foreach(println)
 
-      // Filter for movies with this sim that are "good" as defined by
-      // our quality thresholds above
+//      // Calculate top similar movies
+//      val scoreThreshold = 0.97
+//      val coOccurrenceThreshold = 1000.0
+//
+//      val movieID:Int = args(0).toInt
+//
+//      // Filter for movies with this sim that are "good" as defined by
+//      // our quality thresholds above
+//
+//      val filteredResults = moviePairSimilarities.filter( x =>
+//      {
+//        val pair = x._1
+//        val sim = x._2
+//        (pair._1 == movieID || pair._2 == movieID) && sim._1 > scoreThreshold && sim._2 > coOccurrenceThreshold
+//      }
+//      )
+//
+//      // Sort by quality score.
+//      val results = filteredResults.map( x => (x._2, x._1)).sortByKey(false).take(50)
+//
+//      println("\nTop 50 similar movies for " + nameDict(movieID))
+//      for (result <- results) {
+//        val sim = result._1
+//        val pair = result._2
+//        // Display the similarity result that isn't the movie we're looking at
+//        var similarMovieID = pair._1
+//        if (similarMovieID == movieID) {
+//          similarMovieID = pair._2
+//        }
+//        println(nameDict(similarMovieID) + "\tscore: " + sim._1 + "\tstrength: " + sim._2)
+//      }
 
-      val filteredResults = moviePairSimilarities.filter( x =>
-      {
-        val pair = x._1
-        val sim = x._2
-        (pair._1 == movieID || pair._2 == movieID) && sim._1 > scoreThreshold && sim._2 > coOccurrenceThreshold
-      }
-      )
-
-      // Sort by quality score.
-      val results = filteredResults.map( x => (x._2, x._1)).sortByKey(false).take(50)
-
-      println("\nTop 50 similar movies for " + nameDict(movieID))
-      for (result <- results) {
-        val sim = result._1
-        val pair = result._2
-        // Display the similarity result that isn't the movie we're looking at
-        var similarMovieID = pair._1
-        if (similarMovieID == movieID) {
-          similarMovieID = pair._2
-        }
-        println(nameDict(similarMovieID) + "\tscore: " + sim._1 + "\tstrength: " + sim._2)
-      }
     }
   }
 }
