@@ -3,8 +3,11 @@ package org.cs239cfr.spark
 import org.apache.spark._
 import org.apache.spark.SparkContext._
 import org.apache.log4j._
+
 import scala.io.Source
 import java.nio.charset.CodingErrorAction
+
+import scala.collection.mutable
 import scala.io.Codec
 import scala.math.sqrt
 
@@ -132,7 +135,7 @@ object MovieCFR {
 
     //Save the results if desired
     println("\nSaving the sorted similarities...")
-    val sortedSim = moviePairSimilarities.sortByKey()
+    val sortedSim = moviePairSimilarities.sortByKey().collect
 //    sorted.saveAsTextFile("movie-sims")
 //    sortedSim.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims")
 
@@ -141,17 +144,35 @@ object MovieCFR {
     if (args.length > 0) {
       // Calculate top recommended movie based on user
       val userID: Int = args(0).toInt
-      // TODO: any better way?
-      val userRatings = ratings.filter(l => l._1 == userID).map(_._2).collect().toMap
+
+      //  movieID -> rating
+      val userRatings = ratings.filter(l => l._1 == userID)
+        .map(_._2).collect.toMap
+        .withDefaultValue(0.0)
 
       val userRecs: Map[Int, Double] = nameDict.map(l => l._1 -> 0.0)
-      sortedSim.foreach(l => {
+      val finalRecs = collection.mutable.Map(userRecs.toSeq: _*)
+      val simMap = collection.mutable.Map(userRecs.toSeq: _*)
+      for (l <- sortedSim) {
         val row = l._1._1
         val col = l._1._2
         val simValue = l._2._1
-        userRecs(row) = userRecs(row) + simValue * userRatings(col)
-      })
-      val recommendations = userRecs.toArray.sortWith(_._2 > _._2)
+        val uRating = userRatings(col)
+        if (uRating != 0.0) {
+          finalRecs(row) = finalRecs(row) + simValue * uRating
+          simMap(row) = simMap(row) + simValue
+        }
+      }
+      def normalize(k: Int): (Int, Double) = {
+        val simV = simMap(k)
+        var normalizedValue = 0.0
+        if (simV != 0.0) {
+          normalizedValue = finalRecs(k) / simV
+        }
+        (k, normalizedValue)
+      }
+      val normalizedFinalRecs = finalRecs.keys.map(normalize)
+      val recommendations = normalizedFinalRecs.toArray.sortWith(_._2 > _._2).take(10)
       recommendations.foreach(println)
 
 //      // Calculate top similar movies
