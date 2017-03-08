@@ -96,16 +96,17 @@ object MovieCFR {
     // Set the log level to only print errors
     Logger.getLogger("org").setLevel(Level.ERROR)
 
-//    val conf = new SparkConf()
-//    conf.setAppName("MovieCFR")
-//    val sc = new SparkContext(conf)
-    val sc = new SparkContext("local[*]", "MovieCFR")
+    val conf = new SparkConf()
+    conf.setAppName("MovieCFR")
+    val sc = new SparkContext(conf)
+    //val sc = new SparkContext("local[*]", "MovieCFR")
 
     println("\nLoading movie names...")
     val nameDict = loadMovieNames()
 
 //    val data = sc.textFile("s3n://xgwang-spark-demo/ml-20m/ratings.csv")
-    val data = sc.textFile("ml-100k/ratings.csv")
+//    val data = sc.textFile("ml-100k/ratings.csv")
+    val data = sc.textFile("hdfs:/user/hadoop/ratings.csv")
 
     // Map ratings to key / value pairs: user ID => movie ID, rating
     val ratings = data
