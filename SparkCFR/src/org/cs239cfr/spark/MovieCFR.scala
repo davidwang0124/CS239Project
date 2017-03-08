@@ -21,8 +21,8 @@ object MovieCFR {
     // Create a Map of Ints to Strings, and populate it from u.item.
     var movieNames:Map[Int, String] = Map()
 
-//    val lines = Source.fromFile("ml-20m/movies.csv").getLines().drop(1)
-    val lines = Source.fromFile("movies.csv").getLines()
+    val lines = Source.fromFile("ml-100k/movies.csv").getLines()
+//    val lines = Source.fromFile("movies.csv").getLines()
     for (line <- lines) {
       val fields = line.split(",")
       if (fields.length > 1) {
@@ -93,16 +93,16 @@ object MovieCFR {
     // Set the log level to only print errors
     Logger.getLogger("org").setLevel(Level.ERROR)
 
-    val conf = new SparkConf()
-    conf.setAppName("MovieCFR")
-    val sc = new SparkContext(conf)
-//    val sc = new SparkContext("local[*]", "MovieCFR")
+//    val conf = new SparkConf()
+//    conf.setAppName("MovieCFR")
+//    val sc = new SparkContext(conf)
+    val sc = new SparkContext("local[*]", "MovieCFR")
 
     println("\nLoading movie names...")
     val nameDict = loadMovieNames()
 
-    val data = sc.textFile("s3n://xgwang-spark-demo/ml-20m/ratings.csv")
-//    val data = sc.textFile("ml-20m/ratings.csv")
+//    val data = sc.textFile("s3n://xgwang-spark-demo/ml-20m/ratings.csv")
+    val data = sc.textFile("ml-100k/ratings.csv")
 
     // Map ratings to key / value pairs: user ID => movie ID, rating
     val ratings = data
@@ -134,33 +134,24 @@ object MovieCFR {
     println("\nSaving the sorted similarities...")
     val sortedSim = moviePairSimilarities.sortByKey()
 //    sorted.saveAsTextFile("movie-sims")
-    sortedSim.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims")
+//    sortedSim.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims")
 
     // Extract similarities for the movie we care about that are "good".
 
     if (args.length > 0) {
       // Calculate top recommended movie based on user
       val userID: Int = args(0).toInt
-      val userRatingVector: Array[Double] = new Array(nameDict.size)
-      ratings.filter(l => l._1 == userID)
-          .foreach(l => {
-            val mID = l._2._1 - 1
-            val rating = l._2._2
-            userRatingVector(mID) = rating
-          })
-      val notSeen = nameDict.keySet
-          .filter(movieID => userRatingVector(movieID-1) != 0)
-          .toArray // TODO: pick top 50 or a number as top xxx recommend!!
+      // TODO: any better way?
+      val userRatings = ratings.filter(l => l._1 == userID).map(_._2).collect().toMap
 
-      val userRecs: Array[Double] = new Array(nameDict.size)
+      val userRecs: Map[Int, Double] = nameDict.map(l => l._1 -> 0.0)
       sortedSim.foreach(l => {
-        val recRow = l._1._1 - 1
-        val userRow = l._1._2 - 1
+        val row = l._1._1
+        val col = l._1._2
         val simValue = l._2._1
-        userRecs(recRow) += simValue * userRecs(userRow)
+        userRecs(row) = userRecs(row) + simValue * userRatings(col)
       })
-      val recommendations = notSeen.map(mID => (mID, userRecs(mID-1)))
-        .sortWith(_._2 > _._2)
+      val recommendations = userRecs.toArray.sortWith(_._2 > _._2)
       recommendations.foreach(println)
 
 //      // Calculate top similar movies
