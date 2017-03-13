@@ -13,29 +13,6 @@ import scala.math.sqrt
 
 object MovieCFR {
 
-  /** Load up a Map of movie IDs to movie names. */
-  def loadMovieNames() : Map[Int, String] = {
-
-    // Handle character encoding issues:
-    implicit val codec = Codec("UTF-8")
-    codec.onMalformedInput(CodingErrorAction.REPLACE)
-    codec.onUnmappableCharacter(CodingErrorAction.REPLACE)
-
-    // Create a Map of Ints to Strings, and populate it from u.item.
-    var movieNames:Map[Int, String] = Map()
-
-    val lines = Source.fromFile("ml-100k/movies.csv").getLines()
-//    val lines = Source.fromFile("movies.csv").getLines()
-    for (line <- lines) {
-      val fields = line.split(",")
-      if (fields.length > 1) {
-        movieNames += (fields(0).toInt -> fields(1))
-      }
-    }
-
-    movieNames
-  }
-
   type MovieRating = (Int, Double)
   type UserRatingPair = (Int, (MovieRating, MovieRating))
   def makePairs(userRatings:UserRatingPair) = {
@@ -99,10 +76,7 @@ object MovieCFR {
     val conf = new SparkConf()
     conf.setAppName("MovieCFR")
     val sc = new SparkContext(conf)
-    //val sc = new SparkContext("local[*]", "MovieCFR")
-
-    println("\nLoading movie names...")
-    val nameDict = loadMovieNames()
+//    val sc = new SparkContext("local[*]", "MovieCFR")
 
 //    val data = sc.textFile("s3n://xgwang-spark-demo/ml-20m/ratings.csv")
 //    val data = sc.textFile("ml-100k/ratings.csv")
@@ -136,77 +110,55 @@ object MovieCFR {
 
     //Save the results if desired
     println("\nSaving the sorted similarities...")
-    val sortedSim = moviePairSimilarities.sortByKey().collect
+    val sortedSim = moviePairSimilarities.sortByKey()
 //    sorted.saveAsTextFile("movie-sims")
 //    sortedSim.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims")
 
     // Extract similarities for the movie we care about that are "good".
 
     if (args.length > 0) {
+
+      println("\nLoading movie names...")
+//      val nameDict = sc.textFile("ml-100k/movies.csv")
+      val nameDict = sc.textFile("movies.csv")
+        .map(line => {
+          val fields = line.split(",")
+          (fields(0).toInt, fields(1))
+        })
       // Calculate top recommended movie based on user
       val userID: Int = args(0).toInt
 
       //  movieID -> rating
       val userRatings = ratings.filter(l => l._1 == userID)
-        .map(_._2).collect.toMap
-        .withDefaultValue(0.0)
+        .map(_._2)
 
-      val userRecs: Map[Int, Double] = nameDict.map(l => l._1 -> 0.0)
-      val finalRecs = collection.mutable.Map(userRecs.toSeq: _*)
-      val simMap = collection.mutable.Map(userRecs.toSeq: _*)
-      for (l <- sortedSim) {
+//      val userRecs = nameDict.map(l => l._1 -> 0.0)
+//      val simMap = nameDict.map(l => l._1 -> 0.0)
+      // movieID2 -> (movieID1, simValue)
+      val userRecsNSim = sortedSim.map(l => {
         val row = l._1._1
         val col = l._1._2
         val simValue = l._2._1
-        val uRating = userRatings(col)
-        if (uRating != 0.0) {
-          finalRecs(row) = finalRecs(row) + simValue * uRating
-          simMap(row) = simMap(row) + simValue
-        }
-      }
-      def normalize(k: Int): (Int, Double) = {
-        val simV = simMap(k)
+        (col, (row, simValue))
+      }).join(userRatings)
+      .map(l => {
+        val row = l._2._1._1
+        val simValue = l._2._1._2
+        val uRating = l._2._2
+        (row, (simValue * uRating, simValue))
+      })
+      val finalRecs = userRecsNSim.reduceByKey((x, y) => {
+        (x._1 + y._1, x._2 + y._2)
+      }).map(l => {
         var normalizedValue = 0.0
+        val simV = l._2._2
         if (simV != 0.0) {
-          normalizedValue = finalRecs(k) / simV
+          normalizedValue = l._2._1 / simV
         }
-        (k, normalizedValue)
-      }
-      val normalizedFinalRecs = finalRecs.keys.map(normalize)
-      val recommendations = normalizedFinalRecs.toArray.sortWith(_._2 > _._2).take(10)
+        (normalizedValue, l._1)
+      })
+      val recommendations = finalRecs.sortByKey(false).take(10)
       recommendations.foreach(println)
-
-//      // Calculate top similar movies
-//      val scoreThreshold = 0.97
-//      val coOccurrenceThreshold = 1000.0
-//
-//      val movieID:Int = args(0).toInt
-//
-//      // Filter for movies with this sim that are "good" as defined by
-//      // our quality thresholds above
-//
-//      val filteredResults = moviePairSimilarities.filter( x =>
-//      {
-//        val pair = x._1
-//        val sim = x._2
-//        (pair._1 == movieID || pair._2 == movieID) && sim._1 > scoreThreshold && sim._2 > coOccurrenceThreshold
-//      }
-//      )
-//
-//      // Sort by quality score.
-//      val results = filteredResults.map( x => (x._2, x._1)).sortByKey(false).take(50)
-//
-//      println("\nTop 50 similar movies for " + nameDict(movieID))
-//      for (result <- results) {
-//        val sim = result._1
-//        val pair = result._2
-//        // Display the similarity result that isn't the movie we're looking at
-//        var similarMovieID = pair._1
-//        if (similarMovieID == movieID) {
-//          similarMovieID = pair._2
-//        }
-//        println(nameDict(similarMovieID) + "\tscore: " + sim._1 + "\tstrength: " + sim._2)
-//      }
 
     }
   }
