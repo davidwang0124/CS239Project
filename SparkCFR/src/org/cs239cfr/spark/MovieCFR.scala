@@ -108,9 +108,6 @@ object MovieCFR {
     val moviePairSimilarities = moviePairRatings.mapValues(computeCosineSimilarity).persist()
 //    val moviePairSimilarities = moviePairRatings.mapValues(computeCosineSimilarity).cache()
 
-    //Save the results if desired
-    println("\nSaving the sorted similarities...")
-    val sortedSim = moviePairSimilarities.sortByKey()
 //    sorted.saveAsTextFile("movie-sims")
 //    sortedSim.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims")
 
@@ -118,13 +115,12 @@ object MovieCFR {
 
     if (args.length > 0) {
 
-      println("\nLoading movie names...")
 //      val nameDict = sc.textFile("ml-100k/movies.csv")
-      val nameDict = sc.textFile("movies.csv")
-        .map(line => {
-          val fields = line.split(",")
-          (fields(0).toInt, fields(1))
-        })
+//      val nameDict = sc.textFile("movies.csv")
+//        .map(line => {
+//          val fields = line.split(",")
+//          (fields(0).toInt, fields(1))
+//        })
       // Calculate top recommended movie based on user
       val userID: Int = args(0).toInt
 
@@ -132,10 +128,8 @@ object MovieCFR {
       val userRatings = ratings.filter(l => l._1 == userID)
         .map(_._2)
 
-//      val userRecs = nameDict.map(l => l._1 -> 0.0)
-//      val simMap = nameDict.map(l => l._1 -> 0.0)
       // movieID2 -> (movieID1, simValue)
-      val userRecsNSim = sortedSim.map(l => {
+      val userRecsNSim = moviePairSimilarities.map(l => {
         val row = l._1._1
         val col = l._1._2
         val simValue = l._2._1
