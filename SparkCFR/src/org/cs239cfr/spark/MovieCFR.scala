@@ -97,7 +97,8 @@ object MovieCFR {
     val uniqueJoinedRatings = joinedRatings.filter(filterDuplicates)
 
     // Now key by (movie1, movie2) pairs.
-    val moviePairs = uniqueJoinedRatings.map(makePairs).partitionBy(new HashPartitioner(100))
+    val part = new HashPartitioner(1000)
+    val moviePairs = uniqueJoinedRatings.map(makePairs).partitionBy(part)
 
     // We now have (movie1, movie2) => (rating1, rating2)
     // Now collect all ratings for each movie pair and compute similarity
@@ -115,12 +116,6 @@ object MovieCFR {
 
     if (args.length > 0) {
 
-//      val nameDict = sc.textFile("ml-100k/movies.csv")
-//      val nameDict = sc.textFile("movies.csv")
-//        .map(line => {
-//          val fields = line.split(",")
-//          (fields(0).toInt, fields(1))
-//        })
       // Calculate top recommended movie based on user
       val userID: Int = args(0).toInt
 
@@ -134,13 +129,15 @@ object MovieCFR {
         val col = l._1._2
         val simValue = l._2._1
         (col, (row, simValue))
-      }).join(userRatings)
+      }).partitionBy(part)
+      .join(userRatings)
       .map(l => {
         val row = l._2._1._1
         val simValue = l._2._1._2
         val uRating = l._2._2
         (row, (simValue * uRating, simValue))
-      })
+      }).partitionBy(part)
+
       val finalRecs = userRecsNSim.reduceByKey((x, y) => {
         (x._1 + y._1, x._2 + y._2)
       }).map(l => {
