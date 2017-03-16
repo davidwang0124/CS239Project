@@ -109,8 +109,8 @@ object MovieCFR {
     val moviePairSimilarities = moviePairRatings.mapValues(computeCosineSimilarity).persist()
 //    val moviePairSimilarities = moviePairRatings.mapValues(computeCosineSimilarity).cache()
 
-//    sorted.saveAsTextFile("movie-sims")
-//    sortedSim.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims")
+    moviePairSimilarities.saveAsTextFile("movie-sims")
+//    moviePairSimilarities.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims")
 
     // Extract similarities for the movie we care about that are "good".
 
