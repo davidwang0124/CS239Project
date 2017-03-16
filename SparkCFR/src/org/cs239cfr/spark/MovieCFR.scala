@@ -107,9 +107,10 @@ object MovieCFR {
     // We now have (movie1, movie2) = > (rating1, rating2), (rating1, rating2) ...
     // Can now compute similarities.
     val moviePairSimilarities = moviePairRatings.mapValues(computeCosineSimilarity).persist()
+    val collectedMoviePairSimilarities = moviePairSimilarities.collect()
 //    val moviePairSimilarities = moviePairRatings.mapValues(computeCosineSimilarity).cache()
 
-    moviePairSimilarities.saveAsTextFile("movie-sims")
+//    moviePairSimilarities.saveAsTextFile("movie-sims")
 //    moviePairSimilarities.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims")
 
     // Extract similarities for the movie we care about that are "good".
