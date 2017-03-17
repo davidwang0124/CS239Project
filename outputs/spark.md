@@ -4,3 +4,4 @@
 
 ## 20m
 - 1 master, 4 core, m4.xlarge: 48min
+- 1 master, 3 core, m4.xlarge: 41min
