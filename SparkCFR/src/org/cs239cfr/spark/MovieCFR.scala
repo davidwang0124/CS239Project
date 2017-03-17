@@ -13,30 +13,6 @@ import scala.math.sqrt
 
 object MovieCFR {
 
-  type MovieRating = (Int, Double)
-  type UserRatingPair = (Int, (MovieRating, MovieRating))
-  def makePairs(userRatings:UserRatingPair) = {
-    val movieRating1 = userRatings._2._1
-    val movieRating2 = userRatings._2._2
-
-    val movie1 = movieRating1._1
-    val rating1 = movieRating1._2
-    val movie2 = movieRating2._1
-    val rating2 = movieRating2._2
-
-    ((movie1, movie2), (rating1, rating2))
-  }
-
-  def filterDuplicates(userRatings:UserRatingPair):Boolean = {
-    val movieRating1 = userRatings._2._1
-    val movieRating2 = userRatings._2._2
-
-    val movie1 = movieRating1._1
-    val movie2 = movieRating2._1
-
-    movie1 < movie2
-  }
-
   type RatingPair = (Double, Double)
   type RatingPairs = Iterable[RatingPair]
 
@@ -67,10 +43,6 @@ object MovieCFR {
     (score, numPairs)
   }
 
-  def findPairs(userID:Int, itemsWithRating: Iterable[(Int, Double)]): Unit = {
-
-  }
-
   /** Our main function where the action happens */
   def main(args: Array[String]) {
 
@@ -95,8 +67,10 @@ object MovieCFR {
     // Now key by (movie1, movie2) pairs.
     val part = new HashPartitioner(100)
     val moviePairs = groupedRatings.filter(l => l._2.size > 1)
+      .map(p => (p._1, p._2.take(500)))
       .flatMap(l => {
         val joined = l._2.toList.combinations(2)
+          .filter(p => p(0)._1 < p(1)._1)
         joined.map(p => ((p(0)._1, p(1)._1), (p(0)._2, p(1)._2)))
       }).partitionBy(part)
 
@@ -109,11 +83,12 @@ object MovieCFR {
     val moviePairSimilarities = moviePairRatings.mapValues(computeCosineSimilarity).persist()
 //    val moviePairSimilarities = moviePairRatings.mapValues(computeCosineSimilarity).cache()
 
-//    moviePairSimilarities.saveAsTextFile("movie-sims")
 //    moviePairSimilarities.saveAsTextFile("s3n://xgwang-spark-demo/movie-sims")
 
     // Extract similarities for the movie we care about that are "good".
-
+    if (args.length == 0) {
+      moviePairSimilarities.collect()
+    }
     if (args.length > 0) {
 
       // Calculate top recommended movie based on user

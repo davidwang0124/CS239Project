@@ -111,7 +111,7 @@ if __name__ == "__main__":
     user_id -> [item1,item2,item3,...]
     '''
     user_item_recs = user_item_pairs.map(
-        lambda p: topNRecommendations(p[0],p[1],isb.value,500)).collect()
+        lambda p: topNRecommendations(p[0], p[1], isb.value, 500)).collect()
 
     ''' Read in test data and calculate MAE
     47
