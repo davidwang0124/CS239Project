@@ -67,6 +67,10 @@ object MovieCFR {
     (score, numPairs)
   }
 
+  def findPairs(userID:Int, itemsWithRating: Iterable[(Int, Double)]): Unit = {
+
+  }
+
   /** Our main function where the action happens */
   def main(args: Array[String]) {
 
@@ -78,27 +82,23 @@ object MovieCFR {
     val sc = new SparkContext(conf)
 //    val sc = new SparkContext("local[*]", "MovieCFR")
 
-//    val data = sc.textFile("s3n://xgwang-spark-demo/ml-20m/ratings.csv")
 //    val data = sc.textFile("ml-100k/ratings.csv")
     val data = sc.textFile("hdfs:/user/hadoop/ratings.csv")
 
-    // Map ratings to key / value pairs: user ID => movie ID, rating
+    // Map ratings to key / value pairs: user ID => movie ID, rating; movie ID, rating ...
     val ratings = data
       .map(l => l.split(","))
       .map(l => (l(0).toInt, (l(1).toInt, l(2).toDouble)))
 
-    // Emit every movie rated together by the same user.
-    // Self-join to find every combination.
-    val joinedRatings = ratings.join(ratings)
-
-    // userID => ((movieID, rating), (movieID, rating))
-
-    // Filter out duplicate pairs
-    val uniqueJoinedRatings = joinedRatings.filter(filterDuplicates)
+    val groupedRatings = ratings.groupByKey()
 
     // Now key by (movie1, movie2) pairs.
-    val part = new HashPartitioner(1000)
-    val moviePairs = uniqueJoinedRatings.map(makePairs).partitionBy(part)
+    val part = new HashPartitioner(100)
+    val moviePairs = groupedRatings.filter(l => l._2.size > 1)
+      .flatMap(l => {
+        val joined = l._2.toList.combinations(2)
+        joined.map(p => ((p(0)._1, p(1)._1), (p(0)._2, p(1)._2)))
+      }).partitionBy(part)
 
     // We now have (movie1, movie2) => (rating1, rating2)
     // Now collect all ratings for each movie pair and compute similarity
@@ -107,7 +107,6 @@ object MovieCFR {
     // We now have (movie1, movie2) = > (rating1, rating2), (rating1, rating2) ...
     // Can now compute similarities.
     val moviePairSimilarities = moviePairRatings.mapValues(computeCosineSimilarity).persist()
-    val collectedMoviePairSimilarities = moviePairSimilarities.collect()
 //    val moviePairSimilarities = moviePairRatings.mapValues(computeCosineSimilarity).cache()
 
 //    moviePairSimilarities.saveAsTextFile("movie-sims")
